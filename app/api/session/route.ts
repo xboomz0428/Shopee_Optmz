@@ -8,12 +8,25 @@ export async function POST(req: NextRequest) {
   if (!user) return NextResponse.json({ error: '請先登入' }, { status: 401 })
 
   const body: UploadSessionRequest = await req.json()
-  const { label, cookies, set_active = true } = body
+  const { label, set_active = true } = body
+  let { cookies } = body
 
   if (!label?.trim()) return NextResponse.json({ error: 'Session 名稱為必填' }, { status: 400 })
   if (!Array.isArray(cookies) || cookies.length === 0) {
     return NextResponse.json({ error: 'Cookie 陣列不可為空' }, { status: 400 })
   }
+
+  // 正規化 Cookie 格式（相容瀏覽器匯出的 expirationDate / sameSite: null）
+  cookies = cookies.map((c: ShopeeCookie & { expirationDate?: number; sameSite?: string | null }) => ({
+    name: c.name,
+    value: c.value,
+    domain: c.domain,
+    path: c.path || '/',
+    expires: c.expires ?? c.expirationDate ?? -1,
+    httpOnly: c.httpOnly ?? false,
+    secure: c.secure ?? true,
+    sameSite: (['Strict', 'Lax', 'None'].includes(c.sameSite as string) ? c.sameSite : 'Lax') as 'None' | 'Lax' | 'Strict',
+  }))
 
   // 計算最早過期時間
   const expiresTimestamps = cookies

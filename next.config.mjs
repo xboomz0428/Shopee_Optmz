@@ -1,5 +1,8 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  experimental: {
+    serverComponentsExternalPackages: ['playwright-core', '@browserbasehq/sdk'],
+  },
   images: {
     remotePatterns: [
       { protocol: 'https', hostname: 'cf.shopee.tw' },

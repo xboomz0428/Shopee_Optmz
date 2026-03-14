@@ -47,11 +47,11 @@ export async function scrapeShopeePage(
           name: c.name,
           value: c.value,
           domain: c.domain,
-          path: c.path,
-          expires: c.expires,
-          httpOnly: c.httpOnly,
-          secure: c.secure,
-          sameSite: c.sameSite as 'None' | 'Lax' | 'Strict',
+          path: c.path || '/',
+          expires: c.expires || -1,
+          httpOnly: c.httpOnly ?? false,
+          secure: c.secure ?? true,
+          sameSite: (['Strict', 'Lax', 'None'].includes(c.sameSite) ? c.sameSite : 'Lax') as 'None' | 'Lax' | 'Strict',
         }))
       )
     }
@@ -120,9 +120,9 @@ export async function scrapeShopeeSearch(
   try {
     if (cookies.length > 0) {
       await context.addCookies(cookies.map(c => ({
-        name: c.name, value: c.value, domain: c.domain, path: c.path,
-        expires: c.expires, httpOnly: c.httpOnly, secure: c.secure,
-        sameSite: c.sameSite as 'None' | 'Lax' | 'Strict',
+        name: c.name, value: c.value, domain: c.domain, path: c.path || '/',
+        expires: c.expires || -1, httpOnly: c.httpOnly ?? false, secure: c.secure ?? true,
+        sameSite: (['Strict', 'Lax', 'None'].includes(c.sameSite) ? c.sameSite : 'Lax') as 'None' | 'Lax' | 'Strict',
       })))
     }
 
