@@ -65,11 +65,12 @@ export async function scrapeShopeePage(
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36',
     })
 
-    await page.goto(url, { waitUntil: 'networkidle', timeout: 45000 })
+    // 用 domcontentloaded 取代 networkidle，速度快很多
+    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 })
 
     // 等待商品名稱載入
-    await page.waitForSelector('h1, [class*="product-briefing"]', {
-      timeout: 15000,
+    await page.waitForSelector('h1, [class*="product-briefing"], [class*="pdp-"]', {
+      timeout: 10000,
     }).catch(() => null)
 
     // 執行 DOM 解析
@@ -132,7 +133,7 @@ export async function scrapeShopeeSearch(
     })
 
     const searchUrl = `https://shopee.tw/search?keyword=${encodeURIComponent(keyword)}`
-    await page.goto(searchUrl, { waitUntil: 'networkidle', timeout: 30000 })
+    await page.goto(searchUrl, { waitUntil: 'domcontentloaded', timeout: 25000 })
     await page.waitForSelector('[class*="shopee-search-item-result"]', { timeout: 10000 }).catch(() => null)
 
     // 擷取搜尋結果
