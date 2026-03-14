@@ -11,9 +11,19 @@ dist/
 # Environment variables (NEVER commit these)
 .env
 .env.local
+.env*.local
+.env *
+.env  *
+*.env
 .env.development.local
 .env.test.local
 .env.production.local
+
+# Claude Code 本機設定
+.claude/
+
+# TypeScript build cache
+tsconfig.tsbuildinfo
 
 # Vercel
 .vercel
