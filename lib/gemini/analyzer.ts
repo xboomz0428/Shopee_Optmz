@@ -1,9 +1,7 @@
-import Anthropic from '@anthropic-ai/sdk'
+import { GoogleGenerativeAI } from '@google/generative-ai'
 import type { Product, Competitor, OptimizationInsights } from '@/types'
 
-const client = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY!,
-})
+const genAI = new GoogleGenerativeAI(process.env.GOOGLE_AI_API_KEY!)
 
 const SYSTEM_PROMPT = `你是台灣蝦皮電商優化顧問，專精於提升商品曝光率與轉換率。
 分析時請考慮：台灣消費者搜尋習慣（中文關鍵字優先）、蝦皮演算法偏好關鍵字密度與完整度、競品定價策略、以及台灣電商文案風格。
@@ -28,7 +26,9 @@ function buildPrompt(product: Product, competitors: Competitor[]): string {
     ? competitors.reduce((sum, c) => sum + (c.price || 0), 0) / competitors.length
     : product.price || 0
 
-  return `【待優化商品】
+  return `${SYSTEM_PROMPT}
+
+【待優化商品】
 名稱：${product.name}
 描述：${product.description?.slice(0, 500) ?? '(無描述)'}
 售價：NT$ ${product.price ?? '未知'}
@@ -74,21 +74,13 @@ export async function analyzeProduct(
   product: Product,
   competitors: Competitor[]
 ): Promise<AnalysisResult> {
+  const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
   const prompt = buildPrompt(product, competitors)
 
-  const response = await client.messages.create({
-    model: 'claude-sonnet-4-6',
-    max_tokens: 4096,
-    system: SYSTEM_PROMPT,
-    messages: [{ role: 'user', content: prompt }],
-  })
+  const result = await model.generateContent(prompt)
+  const rawText = result.response.text()
 
-  const rawText = response.content
-    .filter(block => block.type === 'text')
-    .map(block => (block as { type: 'text'; text: string }).text)
-    .join('')
-
-  // 清理 markdown code block（若 Claude 仍包含）
+  // 清理 markdown code block
   const cleaned = rawText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
 
   let parsed: {
@@ -100,8 +92,10 @@ export async function analyzeProduct(
   try {
     parsed = JSON.parse(cleaned)
   } catch {
-    throw new Error(`Claude 回傳格式錯誤：${cleaned.slice(0, 200)}`)
+    throw new Error(`AI 回傳格式錯誤：${cleaned.slice(0, 200)}`)
   }
+
+  const usage = result.response.usageMetadata
 
   return {
     optimized_name: parsed.optimized_name || product.name,
@@ -118,8 +112,8 @@ export async function analyzeProduct(
       score_after: 70,
     },
     raw_response: rawText,
-    prompt_tokens: response.usage.input_tokens,
-    completion_tokens: response.usage.output_tokens,
+    prompt_tokens: usage?.promptTokenCount ?? 0,
+    completion_tokens: usage?.candidatesTokenCount ?? 0,
   }
 }
 
@@ -127,21 +121,13 @@ export async function* analyzeProductStream(
   product: Product,
   competitors: Competitor[]
 ): AsyncGenerator<string> {
+  const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
   const prompt = buildPrompt(product, competitors)
 
-  const stream = await client.messages.stream({
-    model: 'claude-sonnet-4-6',
-    max_tokens: 4096,
-    system: SYSTEM_PROMPT,
-    messages: [{ role: 'user', content: prompt }],
-  })
+  const result = await model.generateContentStream(prompt)
 
-  for await (const chunk of stream) {
-    if (
-      chunk.type === 'content_block_delta' &&
-      chunk.delta.type === 'text_delta'
-    ) {
-      yield chunk.delta.text
-    }
+  for await (const chunk of result.stream) {
+    const text = chunk.text()
+    if (text) yield text
   }
 }

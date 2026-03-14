@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 
 export const maxDuration = 60 // Claude API 分析最長 1 分鐘
 import { createSupabaseServerClient } from '@/lib/supabase/server'
-import { analyzeProduct } from '@/lib/claude/analyzer'
+import { analyzeProduct } from '@/lib/gemini/analyzer'
 import type { AnalyzeRequest, OptimizationStreamEvent } from '@/types'
 
 export async function POST(req: NextRequest) {
@@ -100,7 +100,7 @@ export async function POST(req: NextRequest) {
             suggested_price: result.suggested_price,
             insights: result.insights,
             status: 'completed',
-            claude_raw_response: result.raw_response,
+            ai_raw_response: result.raw_response,
             prompt_tokens: result.prompt_tokens,
             completion_tokens: result.completion_tokens,
           })

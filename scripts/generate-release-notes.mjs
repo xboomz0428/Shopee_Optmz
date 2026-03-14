@@ -1,14 +1,14 @@
 #!/usr/bin/env node
 /**
  * AI 部署說明生成器
- * 呼叫 Claude API 根據 git 變更自動產生繁體中文部署說明
+ * 呼叫 Google AI Studio (Gemini) 根據 git 變更自動產生繁體中文部署說明
  */
 
 import { execSync } from 'child_process'
 import { writeFileSync, mkdirSync } from 'fs'
-import Anthropic from '@anthropic-ai/sdk'
+import { GoogleGenerativeAI } from '@google/generative-ai'
 
-const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+const genAI = new GoogleGenerativeAI(process.env.GOOGLE_AI_API_KEY)
 
 function getGitInfo() {
   const run = (cmd) => {
@@ -27,6 +27,8 @@ function getGitInfo() {
 }
 
 async function generateReleaseNotes(gitInfo, deployUrl) {
+  const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
+
   const prompt = `你是一位技術文件工程師，請根據以下 git 資訊產生一份簡潔的繁體中文部署說明。
 
 【部署資訊】
@@ -56,28 +58,21 @@ ${gitInfo.changedFiles || '（無法取得）'}
 - [如有需要手動操作的步驟或風險提示]
 ===============`
 
-  const response = await client.messages.create({
-    model: 'claude-haiku-4-5-20251001',
-    max_tokens: 800,
-    messages: [{ role: 'user', content: prompt }],
-  })
-
-  return response.content[0].type === 'text' ? response.content[0].text : ''
+  const result = await model.generateContent(prompt)
+  return result.response.text()
 }
 
 async function main() {
   const deployUrl = process.argv[2] || ''
   const outputFile = process.argv[3] || 'deploy-notes.txt'
 
-  console.log('📝 正在使用 Claude AI 生成部署說明...')
+  console.log('📝 正在使用 Google Gemini 生成部署說明...')
 
   const gitInfo = getGitInfo()
   const notes = await generateReleaseNotes(gitInfo, deployUrl)
 
-  // 輸出到終端
   console.log('\n' + notes)
 
-  // 儲存到檔案
   mkdirSync('logs', { recursive: true })
   const logPath = `logs/${outputFile}`
   writeFileSync(logPath, notes, 'utf8')

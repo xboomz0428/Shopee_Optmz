@@ -61,8 +61,8 @@ CREATE TABLE optimization_logs (
   status                TEXT NOT NULL DEFAULT 'pending'
     CHECK (status IN ('pending', 'analyzing', 'completed', 'applied', 'error')),
   error_message         TEXT,
-  claude_raw_response   TEXT,
-  claude_model          TEXT DEFAULT 'claude-sonnet-4-6',
+  ai_raw_response       TEXT,
+  ai_model              TEXT DEFAULT 'gemini-2.0-flash',
   prompt_tokens         INT,
   completion_tokens     INT,
   applied_at            TIMESTAMPTZ,

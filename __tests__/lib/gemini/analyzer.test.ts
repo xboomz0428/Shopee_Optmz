@@ -1,20 +1,17 @@
 import type { Product, Competitor } from '@/types'
 
-// Mock factory 在 jest.mock 中建立 mockCreate，這樣模組載入時就能捕捉到正確的 mock
-jest.mock('@anthropic-ai/sdk', () => {
-  const mockCreate = jest.fn()
-  const MockAnthropic = jest.fn().mockImplementation(() => ({
-    messages: { create: mockCreate },
-  }))
-  // 將 mockCreate 掛在 constructor 上，方便測試中取得
-  ;(MockAnthropic as unknown as Record<string, unknown>)._mockCreate = mockCreate
-  return { __esModule: true, default: MockAnthropic }
-})
+// Mock Google AI SDK
+const mockGenerateContent = jest.fn()
+const mockGenerateContentStream = jest.fn()
 
-// 取得 mockCreate 的參考（必須在 jest.mock 之後）
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const MockAnthropic = require('@anthropic-ai/sdk').default
-const mockCreate: jest.Mock = MockAnthropic._mockCreate
+jest.mock('@google/generative-ai', () => ({
+  GoogleGenerativeAI: jest.fn().mockImplementation(() => ({
+    getGenerativeModel: jest.fn().mockReturnValue({
+      generateContent: mockGenerateContent,
+      generateContentStream: mockGenerateContentStream,
+    }),
+  })),
+}))
 
 const mockProduct: Product = {
   id: 'prod-1',
@@ -59,35 +56,38 @@ const mockCompetitors: Competitor[] = [
   },
 ]
 
-const mockInsights = {
-  competitor_count: 1,
-  avg_competitor_price: 990,
-  price_position: 'above_average' as const,
-  keyword_suggestions: ['台灣現貨', 'ANC降噪', '快速出貨'],
-  strengths: ['音質優良'],
-  weaknesses: ['標題缺乏關鍵字'],
-  score_before: 55,
-  score_after: 78,
-}
-
 const mockApiResponse = {
   optimized_name: '藍牙耳機 ANC主動降噪 台灣現貨快速出貨',
   optimized_description: '【台灣現貨】高音質藍牙耳機\n✅ ANC主動降噪\n✅ 快速出貨',
   suggested_price: 1099,
-  insights: mockInsights,
+  insights: {
+    competitor_count: 1,
+    avg_competitor_price: 990,
+    price_position: 'above_average' as const,
+    keyword_suggestions: ['台灣現貨', 'ANC降噪', '快速出貨'],
+    strengths: ['音質優良'],
+    weaknesses: ['標題缺乏關鍵字'],
+    score_before: 55,
+    score_after: 78,
+  },
 }
+
+function makeMockResponse(text: string) {
+  return {
+    response: {
+      text: () => text,
+      usageMetadata: { promptTokenCount: 500, candidatesTokenCount: 300 },
+    },
+  }
+}
+
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { analyzeProduct } = require('@/lib/gemini/analyzer')
 
 beforeEach(() => {
   jest.clearAllMocks()
-  mockCreate.mockResolvedValue({
-    content: [{ type: 'text', text: JSON.stringify(mockApiResponse) }],
-    usage: { input_tokens: 500, output_tokens: 300 },
-  })
+  mockGenerateContent.mockResolvedValue(makeMockResponse(JSON.stringify(mockApiResponse)))
 })
-
-// 延遲 import 確保 mock 已設定好
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const { analyzeProduct } = require('@/lib/claude/analyzer')
 
 describe('analyzeProduct', () => {
   it('應回傳正確格式的分析結果', async () => {
@@ -102,34 +102,24 @@ describe('analyzeProduct', () => {
     expect(result.completion_tokens).toBe(300)
   })
 
-  it('應正確傳遞 model 與 max_tokens', async () => {
+  it('應呼叫 generateContent 並回傳結果', async () => {
     await analyzeProduct(mockProduct, mockCompetitors)
-
-    expect(mockCreate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 4096,
-      })
-    )
+    expect(mockGenerateContent).toHaveBeenCalledTimes(1)
   })
 
-  it('應清理 Claude 回傳的 markdown code block', async () => {
-    mockCreate.mockResolvedValueOnce({
-      content: [{ type: 'text', text: `\`\`\`json\n${JSON.stringify(mockApiResponse)}\n\`\`\`` }],
-      usage: { input_tokens: 100, output_tokens: 100 },
-    })
+  it('應清理 Gemini 回傳的 markdown code block', async () => {
+    mockGenerateContent.mockResolvedValueOnce(
+      makeMockResponse(`\`\`\`json\n${JSON.stringify(mockApiResponse)}\n\`\`\``)
+    )
 
     const result = await analyzeProduct(mockProduct, mockCompetitors)
     expect(result.optimized_name).toBe(mockApiResponse.optimized_name)
   })
 
-  it('Claude 回傳無效 JSON 時應拋出錯誤', async () => {
-    mockCreate.mockResolvedValueOnce({
-      content: [{ type: 'text', text: '非 JSON 回應' }],
-      usage: { input_tokens: 100, output_tokens: 100 },
-    })
+  it('回傳無效 JSON 時應拋出錯誤', async () => {
+    mockGenerateContent.mockResolvedValueOnce(makeMockResponse('非 JSON 回應'))
 
-    await expect(analyzeProduct(mockProduct, mockCompetitors)).rejects.toThrow('Claude 回傳格式錯誤')
+    await expect(analyzeProduct(mockProduct, mockCompetitors)).rejects.toThrow('AI 回傳格式錯誤')
   })
 
   it('無競品資料時應仍能正常運作', async () => {

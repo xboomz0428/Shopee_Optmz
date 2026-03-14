@@ -72,8 +72,8 @@ export interface OptimizationLog {
   insights: OptimizationInsights | null
   status: OptimizationStatus
   error_message: string | null
-  claude_raw_response: string | null
-  claude_model: string
+  ai_raw_response: string | null
+  ai_model: string
   prompt_tokens: number | null
   completion_tokens: number | null
   applied_at: string | null
